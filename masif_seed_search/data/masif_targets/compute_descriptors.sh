@@ -1,3 +1,4 @@
+#!/bin/bash
 masif_root=../../../
 masif_source=$masif_root/masif/source/
 masif_data=$masif_root/masif/data/

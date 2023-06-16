@@ -1,4 +1,5 @@
 from geometry.open3d_import import *
+from tqdm import tqdm
 import scipy.linalg
 import networkx as nx 
 from scipy.spatial import cKDTree
@@ -13,6 +14,7 @@ from Bio.PDB import PDBParser, PDBIO, Selection
 import tensorflow as tf
 from tensorflow import keras
 import os
+import pickle
 
 def rand_rotation_matrix(deflection=1.0, randnums=None):
     """
@@ -298,55 +300,135 @@ def match_descriptors(directory_list, pids, target_desc, params):
     count_proteins = 0
     count_descriptors = 0
 
-    for ppi_pair_id in directory_list:
-        if 'seed_pdb_list' in params and ppi_pair_id not in params['seed_pdb_list']:
-            continue
-
-        if '.npy' in ppi_pair_id or '.txt' in ppi_pair_id:
-            continue
-
-        mydescdir = os.path.join(params['seed_desc_dir'], ppi_pair_id)
-        for pid in pids:
-            try:
-                fields = ppi_pair_id.split('_')
-                if pid == 'p1':
-                    pdb_chain_id = fields[0]+'_'+fields[1]
-                elif pid == 'p2':
-                    pdb_chain_id = fields[0]+'_'+fields[2]
-                iface = np.load(params['seed_iface_dir']+'/pred_'+pdb_chain_id+'.npy')[0]
-                descs = np.load(mydescdir+'/'+pid+'_desc_straight.npy')
-            except:
+    t = tqdm(total=len(directory_list))
+    if 'paratope_db' not in params.keys():
+        for ppi_pair_id in directory_list:
+            if ppi_pair_id not in paratope_db.keys():
                 continue
-            #print(pdb_chain_id)
-            name = (ppi_pair_id, pid)
-            count_proteins += 1
-            count_descriptors += len(iface)
 
-            diff = np.sqrt(np.sum(np.square(descs - target_desc), axis=1))
+            if '.npy' in ppi_pair_id or '.txt' in ppi_pair_id:
+                continue
 
-            true_iface = np.where(iface > params['iface_cutoff'])[0]
-            near_points = np.where(diff < params['desc_dist_cutoff'])[0]
+            mydescdir = os.path.join(params['seed_desc_dir'], ppi_pair_id)
+            for pid in pids:
+                try:
+                    fields = ppi_pair_id.split('_')
+                    if pid == 'p1':
+                        pdb_chain_id = fields[0]+'_'+fields[1]
+                    elif pid == 'p2':
+                        pdb_chain_id = fields[0]+'_'+fields[2]
+                    iface = np.load(params['seed_iface_dir']+'/pred_'+pdb_chain_id+'.npy')[0]
+                    descs = np.load(mydescdir+'/'+pid+'_desc_straight.npy')
+                except:
+                    continue
+                #print(pdb_chain_id)
+                name = (ppi_pair_id, pid)
+                count_proteins += 1
+                count_descriptors += len(iface)
 
-            selected = np.intersect1d(true_iface, near_points)
-            if len(selected > 0):
-                all_matched_names.append([name]*len(selected))
-                all_matched_vix.append(selected)
-                all_matched_desc_dist.append(diff[selected])
-                #print('Matched {}'.format(ppi_pair_id))
-                #print('Scores: {} {}'.format(iface[selected], diff[selected]))
-            if count_proteins % 1000 == 0:
-                print('Compared target with {} \'fragments\' from {} proteins'.format(count_descriptors, count_proteins))
+                diff = np.sqrt(np.sum(np.square(descs - target_desc), axis=1))
 
+                true_iface = np.where(iface > params['iface_cutoff'])[0]
+                near_points = np.where(diff < params['desc_dist_cutoff'])[0]
 
+                selected = np.intersect1d(true_iface, near_points)
+                if len(selected > 0):
+                    all_matched_names.append([name]*len(selected))
+                    all_matched_vix.append(selected)
+                    all_matched_desc_dist.append(diff[selected])
+                    #print('Matched {}'.format(ppi_pair_id))
+                    #print('Scores: {} {}'.format(iface[selected], diff[selected]))
+                if count_proteins % 1000 == 0:
+                    print('Compared target with {} \'fragments\' from {} proteins'.format(count_descriptors, count_proteins))
+    else:
+        print("Now searching in PPI database...")
+        with open(params['paratope_db'], 'rb') as f:
+            paratope_db = pickle.load(f)
+        for index, ppi_pair_id in enumerate(directory_list):
+            
+            if ppi_pair_id not in paratope_db.keys():
+                continue
+
+            if '.npy' in ppi_pair_id or '.txt' in ppi_pair_id:
+                continue
+            
+            mydescdir = os.path.join(params['seed_desc_dir'], ppi_pair_id)
+            for pid in pids:
+                fields = ppi_pair_id.split('_')
+                try:
+                    if pid == 'p1':
+                        pdb_chain_id = fields[0]+'_'+fields[1]
+                    elif pid == 'p2':
+                        pdb_chain_id = fields[0]+'_'+fields[2]
+                    iface = np.load(params['seed_iface_dir']+'/pred_'+pdb_chain_id+'.npy')[0]   
+                    descs = np.load(mydescdir+'/'+pid+'_desc_straight.npy')
+                except:
+                    print("Fatal error: cannot load interface or descriptors for {}".format(pdb_chain_id))
+
+                parser = PDBParser()
+                seed_pdb_path = os.path.join(params['seed_pdb_dir'],'{}.pdb'.format(ppi_pair_id))
+                seed_struct = parser.get_structure(seed_pdb_path, seed_pdb_path)
+
+                all_paratope_coords = []
+                
+                seed_cutoff = paratope_db[ppi_pair_id]['cutoff']
+                seed_atom_id = paratope_db[ppi_pair_id]['atom_id']
+                seed_paratope = paratope_db[ppi_pair_id]['paratopes']
+
+                for paratope in seed_paratope:
+                    seed_resid = (' ', int(paratope.split('_')[0]), ' ')
+                    seed_chain = paratope.split('_')[1]
+                    seed_coord = seed_struct[0][seed_chain][seed_resid][seed_atom_id].get_coord()
+                    all_paratope_coords.append(seed_coord)
+                seed_coords = np.stack(all_paratope_coords) # combine all coordinates from all paratope residues to find close atom indeces of the seeds later
+
+                name = (ppi_pair_id, pid)
+                count_proteins += 1
+                count_descriptors += len(iface)
+
+                diff = np.sqrt(np.sum(np.square(descs - target_desc), axis=1))
+
+                try:
+                    seed_ply_fn = os.path.join(params['seed_ply_iface_dir'], ppi_pair_id+'.ply')
+                    seed_mesh = pymesh.load_mesh(seed_ply_fn)
+                except:
+                    print("Error: Did not find ply file to load mesh in seed_ply_iface_dir for", ppi_pair_id)
+                    continue
+                
+                # find atom indices close to the seed.
+                selected = np.array([]).astype(int)
+                for c in seed_coords:
+                    dists = np.sqrt(np.sum(np.square(seed_mesh.vertices - c), axis=1))
+                    # seed_patch_indices = get_patch_coords(params['seed_precomp_dir'], ppi_pair_id, pid)
+                    neigh_indices = dists.argsort()[:params['num_sites']]
+                    # target_cutoff = params['target_residue']['cutoff']
+                    # neigh_indices = np.where(dists<target_cutoff)[0]
+                    # neigh_indices = get_target_vix(seed_patch_indices, iface, num_sites=params['num_sites'], selected_vertices=neigh_indices)
+                    selected = np.concatenate((selected, neigh_indices))
+                
+                if len(selected > 0):
+                    all_matched_names.append([name]*len(selected))
+                    all_matched_vix.append(selected)
+                    all_matched_desc_dist.append(diff[selected])
+                if count_proteins % 1000 == 0:
+                    print('Compared target with {} \'fragments\' from {} proteins'.format(count_descriptors, count_proteins))
+
+            update_interval = 100
+            if len(directory_list) - index > update_interval:
+                if index != 0 and index % update_interval == 0:
+                    t.update(update_interval)
+            else:
+                t.update(len(directory_list)-update_interval*(len(directory_list) // update_interval))
+                t.close
     # Flatten the matches and convert to a dictionary 
-    try:
-        matched_names = np.concatenate(all_matched_names, axis=0)
-        matched_vix = np.concatenate(all_matched_vix, axis=0)
-        print('Iterated over {} fragments from {} proteins; matched {} based on descriptor similarity.'.format(count_descriptors, count_proteins, len(matched_vix)))
-        matched_desc_dist = np.concatenate(all_matched_desc_dist, axis=0)
-    except:
-        print("matched no descriptors")
-        return {}
+    # try:
+    matched_names = np.concatenate(all_matched_names, axis=0)
+    matched_vix = np.concatenate(all_matched_vix, axis=0)
+    print('Iterated over {} fragments from {} proteins; matched {} based on descriptor similarity.'.format(count_descriptors, count_proteins, len(matched_vix)))
+    matched_desc_dist = np.concatenate(all_matched_desc_dist, axis=0)
+    # except:
+    #     print("matched no descriptors")
+    #     return {}
     matched_dict = {}
     for name_ix, name in enumerate(matched_names):
         name = (name[0], name[1])
@@ -407,13 +489,14 @@ def multidock(source_pcd, source_patch_coords, source_descs,
             source_pcd, source_patch_coords, pt, source_descs, outward_shift=params['surface_outward_shift'])
            
         result = registration_ransac_based_on_feature_matching(
-            source_patch, target_pcd, source_patch_descs[0], target_descs[0],
+            source_patch, target_pcd, source_patch_descs[0], target_descs[0], True,
             ransac_radius,
             TransformationEstimationPointToPoint(False), 3,
             [CorrespondenceCheckerBasedOnEdgeLength(0.9),
-             CorrespondenceCheckerBasedOnDistance(1.0),
-             CorrespondenceCheckerBasedOnNormal(np.pi/2)],
-            RANSACConvergenceCriteria(ransac_iter, 500)
+            CorrespondenceCheckerBasedOnDistance(1.0),
+            CorrespondenceCheckerBasedOnNormal(np.pi/2)],
+            RANSACConvergenceCriteria(max_iteration=ransac_iter, confidence=0.999),
+            seed=42
         )
         ransac_transformation = result.transformation 
         
@@ -491,7 +574,6 @@ def compute_nn_score(target_pcd, source_pcd, corr,
 
     nn_score_pred, point_importance = \
                     nn_score.eval_model(
-#                            features, nn_score_cutoff
                             features, 0.9 
                             )
 
@@ -522,13 +604,13 @@ def align_protein(name, \
     else: 
         chain = ppi_pair_id.split('_')[2]
         chain_number = 2
-        
+
     # Load source ply file, coords, and descriptors.
     source_pcd, source_desc, source_iface = load_protein_pcd(ppi_pair_id, chain_number, source_paths, flipped_features=False, read_mesh=False)
-    
-    # Randomly rotate the source ply file, and store the random transformation matrix (for benchmark purposes only)
-    random_transformation = get_center_and_random_rotate(source_pcd)
-    source_pcd.transform(random_transformation)
+
+    # # Randomly rotate the source ply file, and store the random transformation matrix (for benchmark purposes only)
+    # random_transformation = get_center_and_random_rotate(source_pcd)
+    # source_pcd.transform(random_transformation)
     
 
     # Get coordinates for all matched vertices.
@@ -566,64 +648,39 @@ def align_protein(name, \
     all_source_scores = [x[0] for x in all_source_scores]
     scores = np.asarray(all_source_scores)
     
-    # Filter anything below neural network score cutoff
-    top_scorers = np.where(scores[:,0] > params['nn_score_cutoff'])[0]
-    
-    if len(top_scorers) > 0:
-        source_outdir = os.path.join(site_outdir, '{}'.format(ppi_pair_id))
-        if not os.path.exists(source_outdir):
-            os.makedirs(source_outdir)
+    source_outdir = os.path.join(site_outdir, '{}'.format(ppi_pair_id))
+    os.makedirs(source_outdir, exist_ok=True)
 
-        # Load source structure 
+    # Load source structure 
+    # Perform the transformation on the atoms
+    for j, k in enumerate(source_vix):
+        res = all_results[j]
+
+        # Load the source pdb structure 
         source_struct = parser.get_structure('{}_{}'.format(pdb,chain), os.path.join(params['seed_pdb_dir'],'{}_{}.pdb'.format(pdb,chain)))
-        # Use the preexisting random rotation matrix that was applied to the patch.
-        random_rotate_source_struct(source_struct, random_transformation)
+        source_structure_cp = copy.deepcopy(source_struct)
 
+        # # Use the preexisting random rotation matrix that was applied to the patch.
+        # random_rotate_source_struct(source_struct, random_transformation)
 
-        # Perform the transformation on the atoms
-        for j in top_scorers:
-            res = all_results[j]
+        # Count clashes and if threshold passes, align the pdb.
+        clashing_ca, clashing_total = count_clashes(res.transformation, np.asarray(all_source_patch[j].points), source_structure_cp, \
+            target_ca_pcd_tree, target_pcd_tree, clashing_ca_thresh=params['allowed_CA_clashes'], clashing_thresh=params['allowed_heavy_atom_clashes'])
 
-            source_structure_cp = copy.deepcopy(source_struct)
+        # # Check if the number of clashes exceeds the number allowed. 
+        if clashing_ca <= params['allowed_CA_clashes'] and clashing_total <= params['allowed_heavy_atom_clashes']:        # Align and save the pdb + patch 
+            out_fn = source_outdir+'/{}_{}_{}'.format(pdb, chain, k)
+            align_and_save(out_fn, all_source_patch[j], source_structure_cp, \
+                                        point_importance=all_point_importance[j])
+
+            # Recompute the score with clashes.
+            print('Selected fragment: {} fragment_id: {} score: {:.4f} desc_dist_score: {:.4f} clashes(CA): {} clashes(total):{}\n'.format(k , ppi_pair_id, scores[j][0], scores[j][1], clashing_ca, clashing_total))
+
+            # # Align and save the ply file for convenience.     
+            # mesh = Simple_mesh()
+            # mesh.load_mesh(os.path.join(params['seed_surf_dir'],'{}.ply'.format(pdb+'_'+chain)))
             
-            # Count clashes and if threshold passes, align the pdb.
-            clashing_ca, clashing_total = count_clashes(res.transformation, np.asarray(all_source_patch[j].points), source_structure_cp, \
-                target_ca_pcd_tree, target_pcd_tree, clashing_ca_thresh=params['allowed_CA_clashes'], clashing_thresh=params['allowed_heavy_atom_clashes'])
-
-            # Check if the number of clashes exceeds the number allowed. 
-            if clashing_ca <= params['allowed_CA_clashes'] and clashing_total <= params['allowed_heavy_atom_clashes']:
-
-                # Align and save the pdb + patch 
-                out_fn = source_outdir+'/{}_{}_{}'.format(pdb, chain, j)
-                align_and_save(out_fn, all_source_patch[j], source_structure_cp, \
-                                            point_importance=all_point_importance[j])
-
-                # Recompute the score with clashes.
-                print('Selected fragment: {} fragment_id: {} score: {:.4f} desc_dist_score: {:.4f} clashes(CA): {} clashes(total):{}\n'.format(j , ppi_pair_id, scores[j][0], scores[j][1], clashing_ca, clashing_total))
-
-                # Output the score for convenience. 
-                out_score = open(out_fn+'.score', 'w+')
-                out_score.write('name: {}, point id: {}, score: {:.4f}, clashing_ca: {}, clashing_heavy: {}, desc_dist_score: {}\n'.format(ppi_pair_id, j, scores[j][0], clashing_ca,clashing_total, scores[j][1]))
-                out_score.close()
-                
-                print ('Surface alignment is deactivated - aligning only pdbs. ')
-                continue
-
-                # Align and save the ply file for convenience.     
-                mesh = Simple_mesh()
-                mesh.load_mesh(os.path.join(params['seed_surf_dir'],'{}.ply'.format(pdb+'_'+chain)))
-                
-                source_pcd_copy = copy.deepcopy(source_pcd)
-                source_pcd_copy.transform(res.transformation)
-                out_vertices = np.asarray(source_pcd_copy.points)
-                out_normals = np.asarray(source_pcd_copy.normals)
-                mesh.set_attribute('vertex_x', out_vertices[:,0])
-                mesh.set_attribute('vertex_y', out_vertices[:,1])
-                mesh.set_attribute('vertex_z', out_vertices[:,2])
-                mesh.set_attribute('vertex_nx', out_normals[:,0])
-                mesh.set_attribute('vertex_ny', out_normals[:,1])
-                mesh.set_attribute('vertex_nz', out_normals[:,2])
-                mesh.vertices = out_vertices
-                mesh.set_attribute('vertex_iface', source_iface) 
-                mesh.save_mesh(out_fn+'.ply')
-                #save_ply(out_fn+'.ply', out_vertices, mesh.faces, out_normals, charges=mesh.get_attribute('vertex_charge'))
+            # Output the score for convenience. 
+            out_score = open(out_fn+'.score', 'w+')
+            out_score.write('name: {}, point id: {}, score: {:.4f}, clashing_ca: {}, clashing_heavy: {}, desc_dist_score: {}\n'.format(ppi_pair_id, k, scores[j][0], clashing_ca,clashing_total, scores[j][1]))
+            out_score.close()
