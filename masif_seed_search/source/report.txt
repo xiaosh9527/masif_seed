@@ -1,0 +1,24 @@
+TensorFlow 2.0 Upgrade Script
+-----------------------------
+Converted 1 files
+Detected 1 issues that require attention
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+File: alignment_evaluation_nn.py
+--------------------------------------------------------------------------------
+alignment_evaluation_nn.py:20:8: WARNING: *.save requires manual check. (This warning is only applicable if the code saves a tf.Keras model) Keras model.save now saves to the Tensorflow SavedModel format by default, instead of HDF5. To continue saving to HDF5, add the argument save_format='h5' to the save() function.
+================================================================================
+Detailed log follows:
+
+================================================================================
+--------------------------------------------------------------------------------
+Processing file 'alignment_evaluation_nn.py'
+ outputting to 'alignment_evaluation_nn_tfv2.py'
+--------------------------------------------------------------------------------
+
+20:8: WARNING: *.save requires manual check. (This warning is only applicable if the code saves a tf.Keras model) Keras model.save now saves to the Tensorflow SavedModel format by default, instead of HDF5. To continue saving to HDF5, add the argument save_format='h5' to the save() function.
+71:17: INFO: Renamed 'tf.ConfigProto' to 'tf.compat.v1.ConfigProto'
+73:23: INFO: Renamed 'tf.Session' to 'tf.compat.v1.Session'
+76:8: INFO: Renamed 'tf.random.set_random_seed' to 'tf.compat.v1.random.set_random_seed'
+--------------------------------------------------------------------------------
+

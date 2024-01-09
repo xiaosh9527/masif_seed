@@ -58,8 +58,8 @@ all_pos_dists = []
 all_neg_dists = []
 all_pos_dists_pos_neg = []
 all_neg_dists_pos_neg = []
-if not os.path.exists(params["desc_dir"]):
-    os.makedirs(params["desc_dir"])
+
+os.makedirs(params["desc_dir"], exist_ok=True)
 
 eval_list = []
 if len(sys.argv) == 3:
@@ -86,7 +86,7 @@ for count, ppi_pair_id in enumerate(ppi_list):
 
     out_desc_dir = os.path.join(params["desc_dir"], ppi_pair_id)
     if not os.path.exists(os.path.join(out_desc_dir, 'p1_desc_straight.npy')):
-        os.mkdir(out_desc_dir)
+        os.makedirs(out_desc_dir, exist_ok=True)
 #    else:
 #        # Ignore this one as it was already computed.
 #        print('Ignoring descriptor computation for {} as it was already computed'.format(ppi_pair_id))
@@ -106,7 +106,7 @@ for count, ppi_pair_id in enumerate(ppi_list):
             labels = np.load(in_dir + "p1" + "_sc_labels.npy")
             mylabels = labels[0]
             labels = np.median(mylabels, axis=1)
-        except:# Exception, e:
+        except Exception as e:
             print('Could not open '+in_dir+'p1'+'_sc_labels.npy: '+str(e))
             continue
         print("Number of vertices: {}".format(len(labels)))

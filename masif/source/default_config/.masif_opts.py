@@ -46,31 +46,6 @@ masif_opts["ppi_search"]["sc_interaction_cutoff"] = 1.5
 masif_opts["ppi_search"]["sc_w"] = 0.25
 
 # Neural network patch application specific parameters.
-masif_opts["epitope"] = {}
-masif_opts["epitope"]["training_list"] = "lists/training.txt"
-masif_opts["epitope"]["testing_list"] = "lists/testing.txt"
-masif_opts["epitope"]["max_shape_size"] = 400
-masif_opts["epitope"]["max_distance"] = 18.0  # Radius for the neural network.
-masif_opts["epitope"][
-    "masif_precomputation_dir"
-] = "data_preparation/04c-precomputation_18A/precomputation/"
-masif_opts["epitope"]["feat_mask"] = [1.0] * 5
-masif_opts["epitope"]["max_sc_filt"] = 1.0
-masif_opts["epitope"]["min_sc_filt"] = 0.5
-masif_opts["epitope"]["pos_surf_accept_probability"] = 1.0
-masif_opts["epitope"]["pos_interface_cutoff"] = 1.0
-masif_opts["epitope"]["range_val_samples"] = 0.9  # 0.9 to 1.0
-masif_opts["epitope"]["cache_dir"] = "nn_models/sc05/cache/"
-masif_opts["epitope"]["model_dir"] = "nn_models/sc05/all_feat/model_data/"
-masif_opts["epitope"]["desc_dir"] = "descriptors/sc05/all_feat/"
-masif_opts["epitope"]["embed_dir"] = "embeddings/"
-masif_opts["epitope"]["gif_descriptors_out"] = "gif_descriptors/"
-# Parameters for shape complementarity calculations.
-masif_opts["epitope"]["sc_radius"] = 18.0
-masif_opts["epitope"]["sc_interaction_cutoff"] = 1.5
-masif_opts["epitope"]["sc_w"] = 0.25
-
-# Neural network patch application specific parameters.
 masif_opts["site"] = {}
 masif_opts["site"]["training_list"] = "lists/training.txt"
 masif_opts["site"]["testing_list"] = "lists/testing.txt"

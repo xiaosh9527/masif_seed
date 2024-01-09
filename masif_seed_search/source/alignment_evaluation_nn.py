@@ -124,7 +124,7 @@ class AlignmentEvaluationNN:
     def eval_model(self, features, nn_score_cutoff):
             max_npoints = self.max_npoints
 
-            assert(max_npoints == 100 or max_npoints == 200)
+            assert(max_npoints == 100 or max_npoints == 200 or max_npoints == 400)
             self.nn_score_cutoff = nn_score_cutoff
             features = np.expand_dims(features, 0)
             n_features = features.shape[2]
