@@ -296,8 +296,6 @@ def match_descriptors(directory_list, pids, target_desc, params):
 
     all_matched_names = []
     all_matched_vix = []
-    # all_matched_desc_dist = []
-    all_matched_info = []
     count_proteins = 0
     count_descriptors = 0
 
@@ -318,21 +316,15 @@ def match_descriptors(directory_list, pids, target_desc, params):
                 iface = np.load(params['seed_iface_dir']+'/pred_'+pdb_chain_id+'.npy')[0]   
                 descs = np.load(mydescdir+'/'+pid+'_desc_straight.npy')
                 seed_sites = paratope_db[name]['site_id']
-                seed_info = [paratope_db[name][info] for info in ['v_call_heavy', 'd_call_heavy', 'j_call_heavy', 'v_call_light', 'j_call_light']]
             except Exception as e:
                 print("Fatal error: cannot load interface or descriptors or seed site info for {} due to {}".format(pdb_chain_id, e))
 
-            # print("Found {} sites for {}".format(len(seed_sites), name))
-
             diff = np.sqrt(np.sum(np.square(descs[seed_sites] - target_desc), axis=1))
-            selected = seed_sites[np.where(diff < params['desc_dist_cutoff'])[0]]
-            # selected = seed_sites # Debug 1.
-            # selected = np.arange(len(descs)) # Debug 2.
+            selected = seed_sites[np.where(diff < params['desc_dist_cutoff'])[0]] # NOTE: iface cutoff is removed here since it is very likely the paratope has low interface score
             
             if len(selected > 0):
                 all_matched_names.append([name]*len(selected))
                 all_matched_vix.append(selected)
-                all_matched_info.append([seed_info]*len(selected))
 
             count_proteins+=1
             count_descriptors+=len(seed_sites)
@@ -341,22 +333,18 @@ def match_descriptors(directory_list, pids, target_desc, params):
     try:
         matched_names = np.concatenate(all_matched_names, axis=0)
         matched_vix = np.concatenate(all_matched_vix, axis=0)
-        matched_info = np.concatenate(all_matched_info, axis=0)
         print('Iterated over {} fragments from {} proteins; matched {} based on descriptor similarity.'.format(count_descriptors, count_proteins, len(matched_vix)))
-        # matched_desc_dist = np.concatenate(all_matched_desc_dist, axis=0)
     except:
         print("matched no descriptors")
-        return {}, {}
+        return {}
+
     matched_dict = {}
-    matched_info_dict = {}
     for name_ix, name in enumerate(matched_names):
         name = (name[0], name[1])
         if name not in matched_dict:
             matched_dict[name] = []
-            matched_info_dict[name] = []
         matched_dict[name].append(matched_vix[name_ix])
-        matched_info_dict[name].append(matched_info[name_ix])
-    return matched_dict, matched_info_dict
+    return matched_dict
 
 def count_clashes(transformation, source_surface_vertices, source_structure, \
         target_ca_pcd_tree, target_pcd_tree, radius=2.0, clashing_ca_thresh=1.0, clashing_thresh=5.0):
@@ -508,7 +496,6 @@ def align_protein(name, \
         target_pcd_tree, \
         source_paths, \
         matched_dict, \
-        matched_info_dict, \
         nn_score, \
         site_outdir, \
         params):
@@ -525,19 +512,11 @@ def align_protein(name, \
     else: 
         chain = ppi_pair_id.split('_')[2]
         chain_number = 2
-        natural_ab_chain = ppi_pair_id.split('_')[1]
-        natural_ab_chain_number = 1
-
     # Load source ply file, coords, and descriptors.
     source_pcd, source_desc, source_iface = load_protein_pcd(ppi_pair_id, chain_number, source_paths, flipped_features=False, read_mesh=False)
 
-    # # Randomly rotate the source ply file, and store the random transformation matrix (for benchmark purposes only)
-    # random_transformation = get_center_and_random_rotate(source_pcd)
-    # source_pcd.transform(random_transformation)
-    
     # Get coordinates for all matched vertices.
     source_vix = matched_dict[name]
-    source_info = matched_info_dict[name]
     source_coord =  get_patch_coords(params['seed_precomp_dir'], ppi_pair_id, pid, cv=source_vix)
     
     # Perform all alignments to target. 
@@ -550,7 +529,6 @@ def align_protein(name, \
     # Score the results using a 'lightweight' scoring function.
     all_source_scores = [None]*len(source_vix)
     for viii in range(len(source_vix)):
-        # if len(all_results[viii].correspondence_set)/float(len(np.asarray(all_source_patch[viii].points))) < 0.3:
         if all_results[viii].fitness < 0.3:
             # Ignore those with poor fitness.
             all_source_scores[viii] = ([0,0], np.zeros_like(all_source_idx[viii]))
@@ -574,8 +552,6 @@ def align_protein(name, \
     source_outdir = site_outdir
     os.makedirs(os.path.join(source_outdir, 'scores'), exist_ok=True)
     os.makedirs(os.path.join(source_outdir, 'pdbs'), exist_ok=True)
-    # source_outdir = os.path.join(site_outdir, '{}'.format(ppi_pair_id))
-    # os.makedirs(source_outdir, exist_ok=True)
 
     # Load source structure 
     # Perform the transformation on the atoms
@@ -587,9 +563,6 @@ def align_protein(name, \
         source_struct = parser.get_structure(f'{pdb}_{chain}', os.path.join(params['seed_pdb_dir'],f'{pdb}_{chain}.pdb'))
 
         source_structure_cp = copy.deepcopy(source_struct)
-
-        # # Use the preexisting random rotation matrix that was applied to the patch.
-        # random_rotate_source_struct(source_struct, random_transformation)
 
         # Count clashes and if threshold passes, align the pdb.
         clashing_ca, clashing_total = count_clashes(res.transformation, np.asarray(all_source_patch[j].points), source_structure_cp, \

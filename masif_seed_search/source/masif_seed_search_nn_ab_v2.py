@@ -13,7 +13,7 @@ from tqdm import tqdm
 from open3d import *
 
 from alignment_evaluation_nn import AlignmentEvaluationNN
-from alignment_utils_ab import *
+from alignment_utils_ab_v2 import *
 
 def main():
     parser = argparse.ArgumentParser(description='MaSIF Pipeline for aligning Antibody/Nanobody paratopes to target epitopes.')
@@ -166,7 +166,7 @@ def main():
         # Match the top descriptors in the database based on descriptor distance.
         print(''.join(['-']*50))
         print('Starting to match target descriptor to descriptors from {} proteins; this may take a while.'.format(len(seed_ppi_pair_ids))) 
-        matched_dict, matched_info_dict = match_descriptors(seed_ppi_pair_ids, ['p1'], target_desc[0][site_vix], params)
+        matched_dict = match_descriptors(seed_ppi_pair_ids, ['p1'], target_desc[0][site_vix], params)
     
         if len(matched_dict.keys())==0:
             continue 
@@ -185,7 +185,6 @@ def main():
                 target_pcd_tree, 
                 source_paths, 
                 matched_dict,
-                matched_info_dict,
                 nn_score_atomic, 
                 site_outdir, 
                 params
