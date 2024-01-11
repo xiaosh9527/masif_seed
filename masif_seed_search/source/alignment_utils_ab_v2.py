@@ -588,8 +588,8 @@ def align_protein(name, \
             score_out_fn = os.path.join(source_outdir, 'scores', f'{pdb}_{chain}')
             out_score = open(score_out_fn+'.score', 'a+')
             out_score.write(
-                'name: {}, point id: {}, alignment_fitness: {:.4f},  score: {:.4f}, clashing_ca: {}, clashing_heavy: {}, desc_dist_score: {}, v_call_heavy: {}, d_call_heavy: {}, j_call_heavy: {}, v_call_light: {}, j_call_light: {}\n'.format(
-                    ppi_pair_id, k, res.fitness, scores[j][0], clashing_ca, clashing_total, scores[j][1], source_info[j][0], source_info[j][1], source_info[j][2], source_info[j][3], source_info[j][4]
+                'name: {}, point id: {}, alignment_fitness: {:.4f},  score: {:.4f}, clashing_ca: {}, clashing_heavy: {}, desc_dist_score: {}\n'.format(
+                    ppi_pair_id, k, res.fitness, scores[j][0], clashing_ca, clashing_total, scores[j][1]
                     )
                 )
             out_score.close()
