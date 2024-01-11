@@ -14,7 +14,11 @@ from Bio.PDB import PDBParser, PDBIO, Selection
 import tensorflow as tf
 from tensorflow import keras
 import os
-import pickle5 as pickle
+
+try: 
+    import pickle5 as pickle
+except:
+    import pickle
 
 def rand_rotation_matrix(deflection=1.0, randnums=None):
     """
@@ -316,6 +320,7 @@ def match_descriptors(directory_list, pids, target_desc, params):
                 iface = np.load(params['seed_iface_dir']+'/pred_'+pdb_chain_id+'.npy')[0]   
                 descs = np.load(mydescdir+'/'+pid+'_desc_straight.npy')
                 seed_sites = paratope_db[name]['site_id']
+                if type(seed_sites) == list: seed_sites = np.asarray(seed_sites)
             except Exception as e:
                 print("Fatal error: cannot load interface or descriptors or seed site info for {} due to {}".format(pdb_chain_id, e))
 
